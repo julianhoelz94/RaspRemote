@@ -51,6 +51,9 @@ public final class Main {
             case 'l':
                 listOpeners();
                 break;
+            case 'r':
+                reload();
+                break;
             case 's':
                 start();
                 break;
@@ -73,32 +76,43 @@ public final class Main {
         boolean made = false;
         if (config.exists() && config.isDirectory()) {
             FileReader reader = null;
+            File[] files = null;
+            try {
+                files = config.listFiles();
+            } catch ( NullPointerException e) { e.printStackTrace();}
 
-            for (final File fileEntry : config.listFiles()) {
-                Properties prop = new Properties();
-                try {
-                    reader = new FileReader(fileEntry.getAbsolutePath());
-                    prop.load(reader);
+            if (files != null) {
+                for (final File fileEntry : files) {
+                    Properties prop = new Properties();
+                    try {
+                        reader = new FileReader(fileEntry.getAbsolutePath());
+                        prop.load(reader);
+                    } catch (IOException e) {
+                        error("Foreign object might have been found in folder '/etc/opneners'! Please remove!");
+                        e.printStackTrace();
+                    } finally {
+                        try {
+                            reader.close();
+                        } catch (Exception e) {
+                        }
+                    }
+                    Opener opener = new Opener(prop);
+                    openersKey.put(opener.getKey(), opener);
+                    openersName.put(opener.getName(), opener);
                 }
-                catch ( IOException e )
-                {
-                    error("Foreign object has been found in folder '/etc/opneners'! Please remove!");
-                    e.printStackTrace();
-                }
-                finally
-                {
-                    try { reader.close(); } catch ( Exception e ) { }
-                }
-                Opener opener = new Opener(prop);
-                openersKey.put(opener.getKey(), opener);
-                openersName.put(opener.getName(), opener);
-            }
+            } else { error("Configuration could not been loaded! Files couldn't be listed!"); }
         } else {
             made = config.mkdir();
         }
         if(made) {
             System.out.println("Directory '/etc/openers' has been created.");
         }
+    }
+
+    private static void reload() {
+        openersKey.clear();
+        openersName.clear();
+        load();
     }
 
     private static void newOpener(Scanner commands) {
@@ -120,19 +134,13 @@ public final class Main {
                     openersName.put(name, opener);
                     FileWriter writer = null;
 
-                    try
-                    {
+                    try {
                         writer = new FileWriter( configPath + "/" + opener.getName() + ".config" );
-
                         Properties prop = opener.getProperties();
                         prop.store( writer, opener.getName() );
-                    }
-                    catch ( IOException e )
-                    {
+                    } catch ( IOException e ) {
                         e.printStackTrace();
-                    }
-                    finally
-                    {
+                    } finally {
                         try { writer.close(); } catch ( Exception e ) { }
                     }
 
@@ -160,20 +168,6 @@ public final class Main {
         System.out.println("Return Port: " + returnPort +"\n");
         for(Opener opener : openersKey.values()) {
             System.out.println(opener.toString());
-        }
-    }
-
-    /**
-     * @Deprecated
-     * @param commands
-     */
-    private static void remove(Scanner commands) {
-        String name  = readString(commands);
-        if (openersName.containsKey(name)) {
-            Opener opener = openersName.remove(name);
-            openersKey.remove(opener.getKey());
-        } else {
-            error("No opener corresponding to entered name!");
         }
     }
 
@@ -291,6 +285,7 @@ public final class Main {
     public static void main(String[] args) throws IOException {
         port = initialize("Port: ");
         returnPort = initialize("ReturnPort: ");
+        load();
         socket = new UdpSocket(port, returnPort);
         Thread thread = new Thread(socket);
         thread.start();
