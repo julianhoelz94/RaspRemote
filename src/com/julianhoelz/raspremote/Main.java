@@ -1,16 +1,12 @@
 package com.julianhoelz.raspremote;
 
-import com.sun.tools.doclets.formats.html.SourceToHTMLConverter;
-
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStreamReader;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Properties;
 import java.util.Scanner;
 
 
@@ -20,6 +16,8 @@ public final class Main {
     private static final String PROMPT_MESSAGE = "opener> ";
     private static final String ERROR_MESSAGE = "Error! ";
     private static final String TABULATOR = "    ";
+    private static final String configPath = "etc/openers";
+
 
     private static boolean run = true;
 
@@ -53,15 +51,6 @@ public final class Main {
             case 'l':
                 listOpeners();
                 break;
-            case 'e':
-                export(commands);
-                break;
-            case 'i':
-                load(commands);
-                break;
-            case 'r':
-                remove(commands);
-                break;
             case 's':
                 start();
                 break;
@@ -79,48 +68,36 @@ public final class Main {
         commands.close();
     }
 
-    private static void export(Scanner commands) {
-        String folder = readString(commands);
-        if (new File(folder).isDirectory()) {
-            for (Opener opener: openersName.values()) {
-                String address = folder + "/" + opener.getName() + ".ser";
+    private static void load() {
+        File config = new File(configPath);
+        boolean made = false;
+        if (config.exists() && config.isDirectory()) {
+            FileReader reader = null;
 
-                try (ObjectOutputStream oos =
-                             new ObjectOutputStream(new FileOutputStream(address))) {
-                    oos.writeObject(opener);
-                    oos.close();
-
-                    System.out.println(opener.getName() + " has been saved.");
-                } catch (Exception ex) {
-                    ex.printStackTrace();
+            for (final File fileEntry : config.listFiles()) {
+                Properties prop = new Properties();
+                try {
+                    reader = new FileReader(fileEntry.getAbsolutePath());
+                    prop.load(reader);
                 }
-            }
-        } else {
-            error("Folder does not exist.");
-        }
-    }
-
-    private static void load(Scanner commands) {
-        String path = readString(commands);
-        if (new File(path).isFile()) {
-            Opener opener = null;
-
-            try {
-                ObjectInputStream ois = new ObjectInputStream(new FileInputStream(path));
-                opener = (Opener) ois.readObject();
-                ois.close();
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
-
-            if (opener != null) {
+                catch ( IOException e )
+                {
+                    error("Foreign object has been found in folder '/etc/opneners'! Please remove!");
+                    e.printStackTrace();
+                }
+                finally
+                {
+                    try { reader.close(); } catch ( Exception e ) { }
+                }
+                Opener opener = new Opener(prop);
                 openersKey.put(opener.getKey(), opener);
                 openersName.put(opener.getName(), opener);
-            } else {
-                error("File could not be read.");
             }
         } else {
-            error("File does not exist.");
+            made = config.mkdir();
+        }
+        if(made) {
+            System.out.println("Directory '/etc/openers' has been created.");
         }
     }
 
@@ -141,6 +118,24 @@ public final class Main {
                     Opener opener = new Opener(name, key, address, confirmation, mode);
                     openersKey.put(key, opener);
                     openersName.put(name, opener);
+                    FileWriter writer = null;
+
+                    try
+                    {
+                        writer = new FileWriter( configPath + "/" + opener.getName() + ".config" );
+
+                        Properties prop = opener.getProperties();
+                        prop.store( writer, opener.getName() );
+                    }
+                    catch ( IOException e )
+                    {
+                        e.printStackTrace();
+                    }
+                    finally
+                    {
+                        try { writer.close(); } catch ( Exception e ) { }
+                    }
+
                 } else {
                     error("Mode does not exist!");
                 }
@@ -168,6 +163,10 @@ public final class Main {
         }
     }
 
+    /**
+     * @Deprecated
+     * @param commands
+     */
     private static void remove(Scanner commands) {
         String name  = readString(commands);
         if (openersName.containsKey(name)) {

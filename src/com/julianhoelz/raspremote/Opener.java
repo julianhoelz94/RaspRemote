@@ -6,11 +6,11 @@ import com.pi4j.io.gpio.Pin;
 import com.pi4j.io.gpio.PinState;
 import com.pi4j.io.gpio.RaspiPin;
 
-import java.io.Serializable;
+import java.util.Properties;
 import java.util.HashMap;
 
 
-public class Opener implements Serializable {
+public class Opener {
 
     static {
         System.setProperty("pi4j.linking", "dynamic");
@@ -22,6 +22,7 @@ public class Opener implements Serializable {
     private Mode mode;
     private Pin pin;
     private GpioPinDigitalOutput relay;
+    private Properties properties;
 
     private static HashMap<Pin, GpioPinDigitalOutput> pins = new HashMap<>();
 
@@ -31,6 +32,26 @@ public class Opener implements Serializable {
         this.confirmation = confirmation;
         this.mode = mode;
         this.pin = RaspiPin.getPinByAddress(address);
+        if (pins.containsKey(pin)) {
+            this.relay = pins.get(pin);
+        } else {
+            this.relay = GpioFactory.getInstance().provisionDigitalOutputPin(pin, name, PinState.HIGH);
+            pins.put(pin, relay);
+        }
+        this.properties.setProperty("name", name);
+        this.properties.setProperty("key", key);
+        this.properties.setProperty("confirmation", confirmation);
+        this.properties.setProperty("mode", mode.toString());
+        this.properties.setProperty("pin", String.valueOf(address));
+    }
+
+    public Opener(Properties properties) {
+        this.properties = properties;
+        this.name = properties.getProperty("name");
+        this.key = properties.getProperty("key");
+        this.confirmation = properties.getProperty("confirmation");
+        this.mode = Mode.getMode(properties.getProperty("mode"));
+        this.pin = RaspiPin.getPinByAddress(Integer.getInteger(properties.getProperty("pin")));
         if (pins.containsKey(pin)) {
             this.relay = pins.get(pin);
         } else {
@@ -50,6 +71,12 @@ public class Opener implements Serializable {
     public String getConfirmation() {
         return confirmation;
     }
+
+    public Properties getProperties() {
+        return properties;
+    }
+
+
 
     public void action() {
         switch (mode) {
